@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Roblox 닉네임 신청 (선착순)</title>
+<style>
+/* (스타일 코드는 변경 없음) */
+body {
+    font-family: 'Arial', sans-serif;
+    background-color: #121212;
+    color: #ffffff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 50px;
+    min-height: 100vh;
+    margin: 0;
+}
+
+h2 {
+    margin-bottom: 20px;
+    color: #bb86fc; 
+}
+
+.input-group {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px; 
+}
+
+input[type="text"] {
+    padding: 10px;
+    font-size: 16px;
+    border-radius: 6px;
+    border: 1px solid #bb86fc; 
+    width: 200px;
+    margin-right: 10px;
+    background-color: #1e1e1e;
+    color: #fff;
+    transition: border-color 0.2s;
+}
+
+input[type="text"]:focus {
+    outline: none;
+    border-color: #6200ee;
+}
+
+button {
+    padding: 10px 16px;
+    font-size: 16px;
+    border: none;
+    border-radius: 6px;
+    background-color: #bb86fc;
+    color: #121212; 
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+button:hover:not(:disabled) {
+    background-color: #9b5de5;
+}
+
+button:disabled {
+    background-color: #555;
+    cursor: not-allowed;
+}
+
+#statusMessage {
+    color: #f44336; 
+    font-size: 14px;
+    height: 20px;
+    margin-top: 5px;
+    text-align: center;
+}
+
+#nameListContainer {
+    margin-top: 30px;
+    width: 260px;
+}
+
+#nameListContainer h3 {
+    margin-bottom: 10px;
+    font-weight: 500;
+    color: #bbb;
+    border-bottom: 1px solid #333;
+    padding-bottom: 5px;
+}
+
+ul#nameList {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+ul#nameList li {
+    background-color: #1e1e1e;
+    margin-bottom: 8px;
+    padding: 10px;
+    border-radius: 6px;
+    text-align: center;
+    word-break: break-all; 
+}
+
+#madeBy {
+    position: fixed;
+    bottom: 10px;
+    right: 10px;
+    font-size: 12px;
+    color: #888;
+}
+</style>
+</head>
+<body>
+
+<h2>Roblox 닉네임 신청</h2>
+
+<div class="input-group">
+    <input id="nameInput" type="text" placeholder="닉네임 (2~15자)" maxlength="15">
+    <button id="submitBtn">신청</button>
+</div>
+
+<div id="statusMessage"></div>
+
+<div id="nameListContainer">
+    <h3>신청자 목록 (선착순)</h3>
+    <ul id="nameList"></ul>
+</div>
+
+<div id="madeBy">Made by Seowoo</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getDatabase, ref, push, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+// =========================================================================
+// 🚨 중요: Firebase 설정 (databaseURL 추가됨)
+// =========================================================================
+const firebaseConfig = {
+    apiKey: "AIzaSyBnZzbGUop9sEOrGSjzBp2dUb-3FBCzWNk",
+    authDomain: "hzbus-891e1.firebaseapp.com",
+    // 🚩 Realtime Database 사용을 위해 URL을 추가했습니다.
+    databaseURL: "https://hzbus-891e1-default-rtdb.firebaseio.com", 
+    projectId: "hzbus-891e1",
+    storageBucket: "hzbus-891e1.firebasestorage.app",
+    messagingSenderId: "644666053693",
+    appId: "1:644666053693:web:d7727b3afa34ec72f90654",
+    measurementId: "G-YF0WN2RP0T"
+};
+
+// Firebase 초기화
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const applicantsRef = ref(db, "applicants"); 
+
+// DOM 요소
+const nameListEl = document.getElementById("nameList");
+const nameInput = document.getElementById("nameInput");
+const submitBtn = document.getElementById("submitBtn");
+const statusMessageEl = document.getElementById("statusMessage");
+
+const MIN_LENGTH = 2; 
+// 12시간 (12 * 60 * 60 * 1000)
+const COOLDOWN_MS = 43200000; 
+
+/**
+ * 남은 시간을 "hh시간 mm분 ss초" 형식으로 변환합니다.
+ */
+function formatRemainingTime(ms) {
+    if (ms <= 0) return "0초";
+    
+    const totalSeconds = Math.floor(ms / 1000);
+    const seconds = totalSeconds % 60;
+    const minutes = Math.floor((totalSeconds / 60) % 60);
+    const hours = Math.floor(totalSeconds / 3600);
+
+    let timeString = "";
+    if (hours > 0) timeString += `${hours}시간 `;
+    if (minutes > 0) timeString += `${minutes}분 `;
+    timeString += `${seconds}초`;
+    
+    return timeString.trim();
+}
+
+/**
+ * 제출 가능 여부를 확인하고 남은 시간을 반환합니다.
+ */
+function checkSubmissionStatus() {
+    // 저장된 마지막 제출 시간 (없으면 0)
+    const lastSubmitTime = parseInt(localStorage.getItem("lastSubmitTime") || "0");
+    const currentTime = Date.now();
+    
+    const timeElapsed = currentTime - lastSubmitTime;
+    const remainingTimeMs = COOLDOWN_MS - timeElapsed;
+
+    return {
+        canSubmit: remainingTimeMs <= 0,
+        remainingTimeMs: Math.max(0, remainingTimeMs)
+    };
+}
+
+let countdownInterval = null;
+
+function updateButtonAndMessage() {
+    const { canSubmit, remainingTimeMs } = checkSubmissionStatus();
+
+    // 쿨타임이 지났다면 (신청 가능)
+    if (canSubmit) {
+        submitBtn.textContent = "신청";
+        submitBtn.disabled = false;
+        nameInput.disabled = false;
+        displayStatus("");
+        if (countdownInterval) {
+            clearInterval(countdownInterval);
+            countdownInterval = null;
+        }
+        return;
+    }
+    
+    // 쿨타임 중이라면 (카운트다운 시작)
+    const remainingTimeStr = formatRemainingTime(remainingTimeMs);
+    submitBtn.textContent = "쿨타임";
+    submitBtn.disabled = true;
+    nameInput.disabled = true;
+    displayStatus(`⏳ 다음 신청까지 ${remainingTimeStr} 남았습니다.`, false, '#ffc107');
+    
+    // 카운트다운 인터벌이 없으면 새로 시작 (1초마다 업데이트)
+    if (!countdownInterval) {
+        countdownInterval = setInterval(updateButtonAndMessage, 1000);
+    }
+}
+
+
+function displayStatus(message, isSuccess = false, color = null) {
+    statusMessageEl.textContent = message;
+    if (color) {
+        statusMessageEl.style.color = color;
+    } else {
+        statusMessageEl.style.color = isSuccess ? '#00e676' : '#f44336';
+    }
+}
+
+async function submitName() {
+    const name = nameInput.value.trim();
+    
+    // 1. 기본 유효성 검사
+    if (!name) {
+        displayStatus("닉네임을 입력하세요!");
+        return;
+    }
+    if (name.length < MIN_LENGTH || name.length > 15) {
+        displayStatus(`닉네임은 ${MIN_LENGTH}자 이상, 15자 이하여야 합니다.`);
+        return;
+    }
+
+    // 2. 쿨타임 검사
+    if (!checkSubmissionStatus().canSubmit) {
+        updateButtonAndMessage();
+        return;
+    }
+
+    // 3. 제출 처리
+    submitBtn.textContent = "신청 중...";
+    submitBtn.disabled = true;
+    displayStatus(""); 
+
+    try {
+        await push(applicantsRef, { 
+            name: name,
+            timestamp: Date.now() // 선착순 정렬을 위한 타임스탬프
+        });
+
+        // 성공: 마지막 제출 시간 업데이트 및 UI 갱신
+        localStorage.setItem("lastSubmitTime", Date.now());
+        nameInput.value = "";
+        displayStatus("✅ 닉네임 신청이 완료되었습니다! 12시간 후에 다시 신청 가능합니다.", true);
+        
+        // 쿨타임 UI 시작
+        updateButtonAndMessage();
+        
+    } catch (err) {
+        // 실패
+        console.error("Firebase 오류:", err);
+        displayStatus("🚨 신청 실패: 서버 오류 또는 권한 문제.");
+        // 실패하면 버튼 활성화
+        submitBtn.textContent = "신청";
+        submitBtn.disabled = false;
+        nameInput.disabled = false;
+    }
+}
+
+// 이벤트 리스너 설정
+submitBtn.addEventListener("click", submitName);
+nameInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !submitBtn.disabled) submitName();
+});
+
+// 페이지 로드 시 쿨타임 상태 확인 및 카운트다운 시작
+document.addEventListener("DOMContentLoaded", updateButtonAndMessage);
+
+
+// 실시간 신청자 리스트 표시 및 선착순 정렬
+onValue(applicantsRef, (snapshot) => {
+    nameListEl.innerHTML = "";
+    if (!snapshot.exists()) {
+        const li = document.createElement("li");
+        li.textContent = "아직 신청자가 없습니다.";
+        nameListEl.appendChild(li);
+        return;
+    }
+    
+    const applicants = [];
+    snapshot.forEach((child) => {
+        applicants.push(child.val());
+    });
+    
+    // 🟢 선착순 정렬: 타임스탬프 오름차순 (작은 값 = 먼저 신청)
+    applicants.sort((a, b) => a.timestamp - b.timestamp); 
+
+    applicants.forEach((applicant) => {
+        const li = document.createElement("li");
+        li.textContent = applicant.name;
+        nameListEl.appendChild(li);
+    });
+});
+</script>
+
+</body>
+</html>
