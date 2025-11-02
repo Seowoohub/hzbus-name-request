@@ -76,8 +76,7 @@ button:disabled {
 
 #nameListContainer {
     margin-top: 30px;
-    /* 🚩 목록 내용을 더 잘 보이도록 너비를 320px에서 400px로 확장 */
-    width: 400px;
+    width: 400px; /* 수정된 너비 유지 */
 }
 
 #nameListContainer h3 {
@@ -99,10 +98,9 @@ ul#nameList li {
     margin-bottom: 8px;
     padding: 10px;
     border-radius: 6px;
-    /* 닉네임이 길어질 경우 대비해 텍스트 정렬을 왼쪽으로 변경 (center는 너무 좁아보일 수 있음) */
     text-align: left; 
     word-break: break-all; 
-    line-height: 1.5; /* 줄 간격 추가 */
+    line-height: 1.5; 
 }
 
 #madeBy {
@@ -163,7 +161,7 @@ const submitBtn = document.getElementById("submitBtn");
 const statusMessageEl = document.getElementById("statusMessage");
 
 const MIN_LENGTH = 2;
-const MAX_LENGTH = 15; // 🚩 최대 길이 상수 추가
+const MAX_LENGTH = 15;
 const COOLDOWN_MS = 43200000; // 12시간
 
 function formatRemainingTime(ms) {
@@ -223,7 +221,6 @@ async function submitName() {
         return;
     }
 
-    /* 🚩 닉네임 최소/최대 길이 유효성 검사 추가 */
     if (
         robloxName.length < MIN_LENGTH || 
         robloxName.length > MAX_LENGTH || 
@@ -276,6 +273,7 @@ kakaoNameInput.addEventListener("keydown", (e) => {
 
 document.addEventListener("DOMContentLoaded", updateButton);
 
+// 🚩 목록 갱신 로직을 더 견고하게 수정
 onValue(applicantsRef, (snapshot) => {
     nameListEl.innerHTML = "";
     if (!snapshot.exists()) {
@@ -286,9 +284,15 @@ onValue(applicantsRef, (snapshot) => {
     }
 
     const applicants = [];
-    snapshot.forEach((child) => applicants.push(child.val()));
+    // 🚩 데이터를 배열로 변환
+    snapshot.forEach((childSnapshot) => {
+        applicants.push(childSnapshot.val());
+    });
+    
+    // 타임스탬프 순으로 정렬
     applicants.sort((a, b) => a.timestamp - b.timestamp);
 
+    // 목록에 표시
     applicants.forEach(({ robloxName, kakaoName }) => {
         const li = document.createElement("li");
         li.innerHTML = `<strong>로블록스:</strong> ${robloxName} <br><strong>카톡:</strong> ${kakaoName}`;
